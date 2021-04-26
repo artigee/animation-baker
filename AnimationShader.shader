@@ -4,10 +4,17 @@ Shader "Unlit/AnimationShader"
     {
         _MainTex("MainTexture", 2D) = "white" {}
         _AnimTex("AnimationTexture", 2D) = "white" {}
-        _Frames("Frames", int) = 1
         _FrameWidth("FrameWidth", int) = 1
-        _AnimationOffset("AnimationOffset", int) = 0
+        _BlendProgress("BlendProgress", float) = 0
         _Speed("Speed", float) = 100
+
+        [Space(20)]
+        _Frames("Frames", int) = 12
+        _AnimationOffset("AnimationOffset", int) = 0
+
+        [Space(20)]
+        _Transition_Frames("Transition_Frames", int) = 12
+        _Transition_AnimationOffset("Transition_AnimationOffset", int) = 0
     }
     SubShader
     {
@@ -39,21 +46,25 @@ Shader "Unlit/AnimationShader"
             float4 _MainTex_ST;
             sampler2D _AnimTex;
             float4 _AnimTex_TexelSize;
-            int _Frames;
             int _FrameWidth;
+            float _BlendProgress;
+
+            int _Frames;
             int _AnimationOffset;
             float _Speed;
+
+            int _Transition_Frames;
+            int _Transition_AnimationOffset;
 
             float GetTime() 
             {
                 return _Time.x * _Speed;
             }
 
-            fixed4 GetColorAt(float2 uv2, int frameOffset)
+            fixed4 GetColorAt(float2 uv2, int frameOffset, int frames, float animationProgress)
             {
-                int time = floor(GetTime());
-                int frame = time % (_Frames - 1) + frameOffset;
-                float xs = (frame + _AnimationOffset) * _FrameWidth * _AnimTex_TexelSize.x + uv2.x;
+                int frame = floor(animationProgress * (frames - 1)) + frameOffset;
+                float xs = frame * _FrameWidth * _AnimTex_TexelSize.x + uv2.x;
                 fixed4 start = tex2Dlod(_AnimTex, float4(xs, uv2.y, 0, 0));
                 return start;
             }
@@ -70,7 +81,14 @@ Shader "Unlit/AnimationShader"
 
             float4 GetVertexOffset(appdata v)
             {
-                fixed3 dv = Convert(GetColorAt(v.uv2, 0));
+                float animProgress = frac(GetTime() / (_Frames - 1));
+                fixed3 dv = Convert(GetColorAt(v.uv2, _AnimationOffset, _Frames, animProgress));
+
+                if (_BlendProgress > 0)
+                {
+                    fixed3 blend = Convert(GetColorAt(v.uv2, _Transition_AnimationOffset, _Transition_Frames, animProgress));
+                    dv = lerp(dv, blend, _BlendProgress);
+                }
                 return float4(-dv.x, dv.z, -dv.y, 0);
             }
 
